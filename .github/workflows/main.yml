@@ -1,4 +1,4 @@
-name: RDP con tmate (Método Manual y Fiable)
+name: RDP Automático y Estable
 
 on:
   workflow_dispatch:
@@ -19,33 +19,47 @@ jobs:
           netsh advfirewall firewall add rule name="Allow RDP" dir=in action=allow protocol=TCP localport=3389
           Set-Service -Name Audiosrv -StartupType Automatic
           Start-Service -Name Audiosrv
+          echo "RDP_USER=Runner" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "RDP_PASSWORD=$Password" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: 2. Dar Acceso Manual con tmate
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: false
-
-      - name: 3. Mostrar Instrucciones y Credenciales
+      - name: 2. Iniciar Túnel y Mantener Activo (Método Automático Estable)
         run: |
-          Write-Host "======================================================================================"
-          Write-Host "                          INSTRUCCIONES PARA ACCESO MANUAL"
-          Write-Host "======================================================================================"
+          # Descarga una versión fija de playit.gg.
+          Invoke-WebRequest -Uri 'https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe' -OutFile "playit.exe"
+          
+          # Inicia playit en segundo plano.
+          Start-Process -FilePath ".\playit.exe" -ArgumentList "" -NoNewWindow -RedirectStandardOutput "$env:TEMP\playit.log" -RedirectStandardError "$env:TEMP\playit_error.log"
+          
+          Write-Host "Esperando 30 segundos a que playit.gg se conecte..."
+          Start-Sleep -Seconds 30
+          
+          # Intenta obtener la dirección del túnel o la URL de reclamación.
+          $TunnelAddress = Get-Content "$env:TEMP\playit.log" -ErrorAction SilentlyContinue | Select-String -Pattern ".*\.playit\.gg:\d{1,5}|https://playit.gg/claim/.*" | ForEach-Object { $_.Matches.Value } | Select-Object -Last 1
+
+          if (-not $TunnelAddress) {
+            Write-Error "Error: No se pudo obtener la dirección del túnel. Revisa los logs."
+            Get-Content "$env:TEMP\playit_error.log"
+            exit 1
+          }
+          
+          # --- El truco está aquí ---
+          # Mostramos la información y luego mantenemos este paso vivo con un bucle.
+          Write-Host "================================================================="
+          Write-Host "               ¡TÚNEL CREADO CON ÉXITO!"
+          Write-Host "================================================================="
+          Write-Host "   Dirección playit.gg: $TunnelAddress"
+          Write-Host "   (Si es un enlace https, visítalo primero para reclamarlo)"
+          Write-Host "   Usuario:             ${{ env.RDP_USER }}"
+          Write-Host "   Contraseña:          ${{ env.RDP_PASSWORD }}"
+          Write-Host "================================================================="
           Write-Host ""
-          Write-Host "1. Conéctate usando la dirección SSH que aparece en el paso anterior."
-          Write-Host ""
-          Write-Host "2. Una vez dentro de la terminal, ejecuta este comando para DESCARGAR playit.gg:"
-          Write-Host "   curl -L -o playit.exe https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe"
-          Write-Host ""
-          Write-Host "3. Ahora, ejecuta este comando para INICIAR playit.gg:"
-          Write-Host "   ./playit.exe"
-          Write-Host ""
-          Write-Host "4. Busca la URL de reclamación (https://playit.gg/claim/...) y úsala en tu navegador."
-          Write-Host ""
-          Write-Host "======================================================================================"
-          Write-Host "                             CREDENCIALES DE RDP"
-          Write-Host "======================================================================================"
-          Write-Host ""
-          Write-Host "   Usuario:    Runner"
-          Write-Host "   Contraseña: P@ssw0rdFeloxPC2025!"
-          Write-Host ""
-          Write-Host "======================================================================================"
+          Write-Host "Este paso se mantendrá en ejecución para mantener la VPS activa."
+          Write-Host "Puedes cerrar la ventana de logs. Cancela el workflow en GitHub cuando termines."
+          
+          # Bucle "Keep-Alive": Mantiene el paso activo durante casi 6 horas.
+          while ($true) {
+            Start-Sleep -Seconds 60
+          }
+          
+      # Ya no necesitamos los pasos de "Mostrar Credenciales" o "Mantener Activo"
+      # porque todo se hace en el paso 2.
