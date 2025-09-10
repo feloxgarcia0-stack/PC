@@ -1,0 +1,63 @@
+name: RDP Híbrido (Automático + Manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: 1. Habilitar RDP, Usuario y SONIDO
+        run: |
+          # --- Configuración de Usuario y RDP ---
+          $Password = "P@ssw0rdFeloxPC2025!"
+          net user Runner $Password /add /y
+          net localgroup administrators Runner /add
+          net localgroup "Remote Desktop Users" Runner /add
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          netsh advfirewall firewall add rule name="Allow RDP" dir=in action=allow protocol=TCP localport=3389
+          
+          # --- ACTIVACIÓN DEL SONIDO EN EL SERVIDOR ---
+          # Pone el servicio de Audio de Windows en modo Automático y lo inicia.
+          Set-Service -Name Audiosrv -StartupType Automatic
+          Start-Service -Name Audiosrv
+          
+          # --- Guardar Credenciales ---
+          echo "RDP_USER=Runner" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "RDP_PASSWORD=$Password" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: 2. (PLAN A - Automático) Iniciar Túnel con playit.gg
+        run: |
+          # Descarga una versión fija de playit.gg para asegurar estabilidad.
+          Invoke-WebRequest -Uri 'https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe' -OutFile "playit.exe"
+          
+          # Inicia playit en segundo plano, guardando su log.
+          Start-Process -FilePath ".\playit.exe" -ArgumentList "" -NoNewWindow -RedirectStandardOutput "$env:TEMP\playit.log" -RedirectStandardError "$env:TEMP\playit_error.log"
+          
+          Write-Host "Esperando 30 segundos a que playit.gg se conecte..."
+          Start-Sleep -Seconds 30
+          
+          # Intenta obtener la dirección del túnel o la URL de reclamación.
+          $TunnelAddress = Get-Content "$env:TEMP\playit.log" -ErrorAction SilentlyContinue | Select-String -Pattern ".*\.playit\.gg:\d{1,5}|https://playit.gg/claim/.*" | ForEach-Object { $_.Matches.Value } | Select-Object -Last 1
+
+          if ($TunnelAddress) {
+            echo "PLAYIT_ADDRESS=$TunnelAddress" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host "================================================================="
+            Write-Host "                PLAN A (Automático) - ¡ÉXITO!"
+            Write-Host "================================================================="
+            Write-Host "   Dirección playit.gg: $TunnelAddress"
+            Write-Host "   (Si es un enlace https, visítalo primero para reclamar el túnel)"
+            Write-Host "   Usuario: ${{ env.RDP_USER }}"
+            Write-Host "   Contraseña: ${{ env.RDP_PASSWORD }}"
+            Write-Host "================================================================="
+          } else {
+            Write-Warning "El Plan A (Automático con playit.gg) no pudo obtener una dirección. Procede con el Plan B (Manual con tmate)."
+          }
+
+      - name: 3. (PLAN B - Manual) Dar Acceso con tmate
+        uses: mxschmitt/action-tmate@v3
+        with:
+          # Desactiva la necesidad de clave pública para que no te dé "permission denied".
+          limit-access-to-actor: false
