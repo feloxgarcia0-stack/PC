@@ -1,4 +1,4 @@
-name: RDP 100% Automático con playit.gg
+name: RDP 100% Automático (CORREGIDO)
 
 on:
   workflow_dispatch:
@@ -24,25 +24,28 @@ jobs:
 
       - name: 2. Iniciar Túnel y Mantener Activo (Método Automático con Llave Secreta)
         env:
-          # Inyecta la llave secreta en el entorno del script.
-          PLAYIT_SECRET: ${{ secrets.PLAYIT_SECRET_KEY }}
+          # --- CORRECCIÓN CLAVE ---
+          # El nombre correcto de la variable es PLAYIT_AGENT_SECRET
+          PLAYIT_AGENT_SECRET: ${{ secrets.PLAYIT_SECRET_KEY }}
         run: |
           # Descarga una versión fija de playit.gg.
           Invoke-WebRequest -Uri 'https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe' -OutFile "playit.exe"
           
-          # Inicia playit en segundo plano, PASÁNDOLE LA LLAVE SECRETA.
+          # Inicia playit en segundo plano. Ahora SÍ usará la llave secreta.
           Start-Process -FilePath ".\playit.exe" -ArgumentList "" -NoNewWindow -RedirectStandardOutput "$env:TEMP\playit.log" -RedirectStandardError "$env:TEMP\playit_error.log"
           
           Write-Host "Esperando 30 segundos a que el túnel se autentique y se conecte..."
           Start-Sleep -Seconds 30
           
-          # Ahora, busca DIRECTAMENTE la dirección final (host:puerto).
+          # Busca DIRECTAMENTE la dirección final (host:puerto).
           $TunnelAddress = Get-Content "$env:TEMP\playit.log" -ErrorAction SilentlyContinue | Select-String -Pattern ".*\.playit\.gg:\d{1,5}" | ForEach-Object { $_.Matches.Value } | Select-Object -Last 1
 
           if (-not $TunnelAddress) {
-            Write-Error "Error: No se pudo obtener la dirección del túnel. Revisa los logs."
-            Get-Content "$env:TEMP\playit_error.log"
-            Get-Content "$env:TEMP\playit.log" # Muestra el log principal para depurar
+            Write-Error "Error: No se pudo obtener la dirección del túnel. Revisa los logs de abajo para ver el problema."
+            Write-Host "--- LOG DE ERRORES ---"
+            Get-Content "$env:TEMP\playit_error.log" -ErrorAction SilentlyContinue
+            Write-Host "--- LOG PRINCIPAL ---"
+            Get-Content "$env:TEMP\playit.log" -ErrorAction SilentlyContinue
             exit 1
           }
           
