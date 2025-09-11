@@ -1,4 +1,4 @@
-name: RDP Optimizado (Estable)
+name: RDP Optimizado (Estable y Corregido)
 
 on:
   workflow_dispatch:
@@ -25,19 +25,15 @@ jobs:
 
           # --- OPTIMIZACIÓN DE RENDIMIENTO (Forzar CPU) ---
           Write-Host "Optimizando el sistema para forzar el uso de CPU..."
-          # 1. Poner Windows en modo "Mejor Rendimiento"
           Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' -Name 'VisualFxSetting' -Value 2
-          # 2. Desactivar aceleración por hardware en Microsoft Edge
           New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft" -Name "Edge" -Force
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "HardwareAccelerationModeEnabled" -Value 0 -Type DWord -Force
-          # 3. Optimizar el servicio RDP para no depender de hardware gráfico
           New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT" -Name "Terminal Services" -Force
           Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" -Name "fEnableHardwareRDP" -Value 0 -Type DWord -Force
 
       - name: 2. Iniciar Túnel y Mantener Activo (Método Automático Estable)
         run: |
-          # (Este paso se queda exactamente igual que antes)
-          Invoke-WebRequest -Uri 'https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86__64-signed.exe' -OutFile "playit.exe"
+          Invoke-WebRequest -Uri 'https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe' -OutFile "playit.exe"
           Start-Process -FilePath ".\playit.exe" -ArgumentList "" -NoNewWindow -RedirectStandardOutput "$env:TEMP\playit.log" -RedirectStandardError "$env:TEMP\playit_error.log"
           Write-Host "Esperando 30 segundos a que playit.gg se conecte..."
           Start-Sleep -Seconds 30
@@ -48,8 +44,10 @@ jobs:
           Write-Host "================================================================="
           Write-Host "   Dirección playit.gg: $TunnelAddress"
           Write-Host "   (Si es un enlace https, visítalo primero para reclamarlo)"
-          Write-Host "   Usuario:             ${{ env:RDP_USER }}"
-          Write-Host "   Contraseña:          ${{ env:RDP_PASSWORD }}"
+          # --- LÍNEAS CORREGIDAS ---
+          # Se cambió el ':' por un '.'
+          Write-Host "   Usuario:             ${{ env.RDP_USER }}"
+          Write-Host "   Contraseña:          ${{ env.RDP_PASSWORD }}"
           Write-Host "================================================================="
           Write-Host ""
           Write-Host "Este paso se mantendrá en ejecución para mantener la VPS activa."
