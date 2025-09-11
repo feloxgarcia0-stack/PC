@@ -1,4 +1,4 @@
-name: RDP Automático y Estable
+name: RDP Optimizado con Temporizador
 
 on:
   workflow_dispatch:
@@ -9,8 +9,9 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: 1. Habilitar RDP, Usuario y Sonido
+      - name: 1. Configuración Avanzada (RDP, Usuario, Sonido, Optimización y Temporizador)
         run: |
+          # --- HABILITAR RDP, USUARIO Y SONIDO (Como antes) ---
           $Password = "P@ssw0rdFeloxPC2025!"
           net user Runner $Password /add /y
           net localgroup administrators Runner /add
@@ -22,28 +23,61 @@ jobs:
           echo "RDP_USER=Runner" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "RDP_PASSWORD=$Password" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+          # --- OPTIMIZACIÓN DE RENDIMIENTO (Forzar CPU) ---
+          Write-Host "Optimizando el sistema para forzar el uso de CPU..."
+          # 1. Poner Windows en modo "Mejor Rendimiento" (desactiva animaciones, etc.)
+          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' -Name 'VisualFxSetting' -Value 2
+          # 2. Desactivar aceleración por hardware en Microsoft Edge (mejora la navegación)
+          New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft" -Name "Edge" -Force
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "HardwareAccelerationModeEnabled" -Value 0 -Type DWord -Force
+          # 3. Optimizar el servicio RDP para no depender de hardware gráfico
+          New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT" -Name "Terminal Services" -Force
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services" -Name "fEnableHardwareRDP" -Value 0 -Type DWord -Force
+
+          # --- INSTALACIÓN DEL TEMPORIZADOR (Rainmeter) ---
+          Write-Host "Instalando el temporizador de cuenta regresiva..."
+          # 1. Descargar e instalar Rainmeter silenciosamente
+          Invoke-WebRequest -Uri 'https://github.com/rainmeter/rainmeter/releases/download/v4.5.18/Rainmeter-4.5.18.exe' -OutFile 'Rainmeter.exe'
+          Start-Process -FilePath '.\Rainmeter.exe' -ArgumentList '/S' -Wait
+          # 2. Crear la carpeta y el archivo de configuración para nuestro widget
+          $SkinPath = "$env:APPDATA\Rainmeter\Skins\Countdown"
+          New-Item -ItemType Directory -Path $SkinPath -Force
+          # 3. Crear el widget. Calcula los 360 minutos del workflow y los convierte a segundos.
+          $RemainingSeconds = 360 * 60
+          $IniContent = @"
+          [Rainmeter]
+          Update=1000
+          [MeasureCountdown]
+          Measure=Calc
+          Formula=($RemainingSeconds - Counter)
+          [MeterCountdown]
+          MeasureName=MeasureCountdown
+          Meter=String
+          FontFace=Trebuchet MS
+          FontSize=24
+          FontColor=255,255,255,220
+          StringAlign=Center
+          AntiAlias=1
+          Text="Tiempo Restante:%1!t"
+          "@
+          Set-Content -Path "$SkinPath\Countdown.ini" -Value $IniContent
+          # 4. Iniciar Rainmeter y activar nuestro widget en la esquina superior derecha
+          $RainmeterPath = "$env:ProgramFiles\Rainmeter\Rainmeter.exe"
+          Start-Process -FilePath $RainmeterPath
+          Start-Sleep -Seconds 5
+          & "$RainmeterPath" !ActivateConfig "Countdown" "Countdown.ini"
+          & "$RainmeterPath" !SetWindowPosition "Countdown" "99.999%" "0"
+          & "$RainmeterPath" !ZPos "Countdown" "1"
+
       - name: 2. Iniciar Túnel y Mantener Activo (Método Automático Estable)
         run: |
-          # Descarga una versión fija de playit.gg.
+          # (Este paso se queda exactamente igual que antes)
           Invoke-WebRequest -Uri 'https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe' -OutFile "playit.exe"
-          
-          # Inicia playit en segundo plano.
           Start-Process -FilePath ".\playit.exe" -ArgumentList "" -NoNewWindow -RedirectStandardOutput "$env:TEMP\playit.log" -RedirectStandardError "$env:TEMP\playit_error.log"
-          
           Write-Host "Esperando 30 segundos a que playit.gg se conecte..."
           Start-Sleep -Seconds 30
-          
-          # Intenta obtener la dirección del túnel o la URL de reclamación.
           $TunnelAddress = Get-Content "$env:TEMP\playit.log" -ErrorAction SilentlyContinue | Select-String -Pattern ".*\.playit\.gg:\d{1,5}|https://playit.gg/claim/.*" | ForEach-Object { $_.Matches.Value } | Select-Object -Last 1
-
-          if (-not $TunnelAddress) {
-            Write-Error "Error: No se pudo obtener la dirección del túnel. Revisa los logs."
-            Get-Content "$env:TEMP\playit_error.log"
-            exit 1
-          }
-          
-          # --- El truco está aquí ---
-          # Mostramos la información y luego mantenemos este paso vivo con un bucle.
+          if (-not $TunnelAddress) { Write-Error "Error: No se pudo obtener la dirección del túnel."; Get-Content "$env:TEMP\playit_error.log"; exit 1 }
           Write-Host "================================================================="
           Write-Host "               ¡TÚNEL CREADO CON ÉXITO!"
           Write-Host "================================================================="
@@ -54,12 +88,4 @@ jobs:
           Write-Host "================================================================="
           Write-Host ""
           Write-Host "Este paso se mantendrá en ejecución para mantener la VPS activa."
-          Write-Host "Puedes cerrar la ventana de logs. Cancela el workflow en GitHub cuando termines."
-          
-          # Bucle "Keep-Alive": Mantiene el paso activo durante casi 6 horas.
-          while ($true) {
-            Start-Sleep -Seconds 60
-          }
-          
-      # Ya no necesitamos los pasos de "Mostrar Credenciales" o "Mantener Activo"
-      # porque todo se hace en el paso 2.
+          while ($true) { Start-Sleep -Seconds 60 }
