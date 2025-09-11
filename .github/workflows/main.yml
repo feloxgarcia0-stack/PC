@@ -1,4 +1,4 @@
-name: RDP Híbrido Definitivo (AHK + tmate) - CORREGIDO
+name: RDP Automático y Estable (Final)
 
 on:
   workflow_dispatch:
@@ -32,11 +32,9 @@ jobs:
 
           # --- CREACIÓN DEL SCRIPT DE AUTOHOTKEY ---
           Write-Host "Creando el script de teclado personalizado en el Escritorio..."
-          # --- LA CORRECCIÓN ESTÁ AQUÍ ---
           # 1. Asegurarse de que la carpeta del Escritorio exista.
           New-Item -ItemType Directory -Path "C:\Users\Runner\Desktop" -Force
-          
-          # 2. Ahora sí, crear el archivo .ahk
+          # 2. Crear el archivo .ahk
           $AhkScript = @"
           ; ===================================================================
           ;        SCRIPT DE TECLADO PERSONALIZADO POR FELOX v2.0
@@ -60,22 +58,29 @@ jobs:
           "@
           Set-Content -Path "C:\Users\Runner\Desktop\mi_teclado_v2.ahk" -Value $AhkScript
           
-      - name: 2. (PLAN A - Automático) Iniciar Túnel y Mantener Activo
+      - name: 2. Iniciar Túnel y Mantener Activo (Método Automático Estable)
         run: |
           Invoke-WebRequest -Uri 'https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe' -OutFile "playit.exe"
-          Start-Process -FilePath ".\playit.exe" -ArgumentList "" -NoNewWindow -RedirectStandardOutput "$env:TEMP\playit.log"
-          Write-Host "Esperando 30 segundos..."
+          Start-Process -FilePath ".\playit.exe" -ArgumentList "" -NoNewWindow -RedirectStandardOutput "$env:TEMP\playit.log" -RedirectStandardError "$env:TEMP\playit_error.log"
+          Write-Host "Esperando 30 segundos a que playit.gg se conecte..."
           Start-Sleep -Seconds 30
-          $TunnelAddress = Get-Content "$env:TEMP\playit.log" -ErrorAction SilentlyContinue | Select-String -Pattern "https://playit.gg/claim/.*" | Select-Object -Last 1
-          if ($TunnelAddress) {
-            Write-Host "================ PLAN A - ¡ÉXITO! ================"
-            Write-Host "   URL de Reclamación: $($TunnelAddress.Line)"
-            Write-Host "================================================"
-          } else {
-            Write-Warning "El Plan A (Automático) falló. Usa el Plan B (Manual) del siguiente paso."
-          }
+          $TunnelAddress = Get-Content "$env:TEMP\playit.log" -ErrorAction SilentlyContinue | Select-String -Pattern ".*\.playit\.gg:\d{1,5}|https://playit.gg/claim/.*" | ForEach-Object { $_.Matches.Value } | Select-Object -Last 1
+          if (-not $TunnelAddress) { Write-Error "Error: No se pudo obtener la dirección del túnel."; Get-Content "$env:TEMP\playit_error.log"; exit 1 }
           
-      - name: 3. (PLAN B - Manual) Dar Acceso de Respaldo con tmate y Mantener Vivo
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: false
+          # --- LA LÓGICA CLAVE QUE RESTAURÉ ---
+          # Mostramos la información y luego mantenemos este paso vivo con un bucle.
+          Write-Host "================================================================="
+          Write-Host "               ¡TÚNEL CREADO CON ÉXITO!"
+          Write-Host "================================================================="
+          Write-Host "   Dirección playit.gg: $TunnelAddress"
+          Write-Host "   (Si es un enlace https, visítalo primero para reclamarlo)"
+          Write-Host "   Usuario:             ${{ env.RDP_USER }}"
+          Write-Host "   Contraseña:          ${{ env.RDP_PASSWORD }}"
+          Write-Host "================================================================="
+          Write-Host ""
+          Write-Host "Este paso se mantendrá en ejecución para mantener la VPS activa."
+          
+          # El bucle "Keep-Alive" que mantiene este paso y el túnel activos.
+          while ($true) {
+            Start-Sleep -Seconds 60
+          }
