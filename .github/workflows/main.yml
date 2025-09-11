@@ -1,4 +1,4 @@
-name: RDP Híbrido Definitivo (AHK + tmate)
+name: RDP Híbrido Definitivo (AHK + tmate) - CORREGIDO
 
 on:
   workflow_dispatch:
@@ -32,6 +32,11 @@ jobs:
 
           # --- CREACIÓN DEL SCRIPT DE AUTOHOTKEY ---
           Write-Host "Creando el script de teclado personalizado en el Escritorio..."
+          # --- LA CORRECCIÓN ESTÁ AQUÍ ---
+          # 1. Asegurarse de que la carpeta del Escritorio exista.
+          New-Item -ItemType Directory -Path "C:\Users\Runner\Desktop" -Force
+          
+          # 2. Ahora sí, crear el archivo .ahk
           $AhkScript = @"
           ; ===================================================================
           ;        SCRIPT DE TECLADO PERSONALIZADO POR FELOX v2.0
@@ -69,7 +74,6 @@ jobs:
           } else {
             Write-Warning "El Plan A (Automático) falló. Usa el Plan B (Manual) del siguiente paso."
           }
-          # Este paso ahora NO se queda en bucle, para permitir que tmate se ejecute.
           
       - name: 3. (PLAN B - Manual) Dar Acceso de Respaldo con tmate y Mantener Vivo
         uses: mxschmitt/action-tmate@v3
